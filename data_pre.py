@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import LabelEncoder
@@ -44,13 +45,16 @@ def data_preprocess(folder_path, data_save_path):
         file_path = os.path.join(folder_path, file)
 
         # Read the time series from an Excel file
-        df = pd.read_excel(file_path, parse_dates=['Time'])
+        # df = pd.read_excel(file_path, parse_dates=['Time'])
+        df = pd.read_excel(file_path,header=0)
+        # df['Time'] = pd.to_datetime(df['Time'], errors='coerce')
+        df['Time'] = pd.to_datetime(df['Time'], unit='s')
 
         # Set the index of the DataFrame to the time column
+        
         df.set_index('Time', inplace=True)
 
-        ## Resample the time series to a frequency of 2 seconds 
-        # using the interploting method "linear"
+        
         df_resampled = df.resample('2S').mean().interpolate(method="linear")
         ## using the interploting method "spline" can be computationally expensive \\
         ## and may require more tuning of the interpolation parameters
@@ -59,11 +63,10 @@ def data_preprocess(folder_path, data_save_path):
         # df_resampled = df.resample('2S').mean().interpolate(method="polynomial", order=2)
 
         ##change the workLoad to categorical variants
-        df_resampled.loc[df_resampled['WorkLoad'] <= 10.0, 'WorkLoad'] = 0.0
-        df_resampled.loc[(df_resampled['WorkLoad'] <= 30.0) & (df_resampled['WorkLoad'] > 10.0), 'WorkLoad'] = 20.0
-        df_resampled.loc[(df_resampled['WorkLoad'] <= 50.0) & (df_resampled['WorkLoad'] > 30.0), 'WorkLoad'] = 40.0
-        df_resampled.loc[(df_resampled['WorkLoad'] <= 70.0) & (df_resampled['WorkLoad'] > 50.0), 'WorkLoad'] = 60.0
-        df_resampled.loc[(df_resampled['WorkLoad'] <= 90.0) & (df_resampled['WorkLoad'] > 70.0), 'WorkLoad'] = 80.0
+        # pdb.set_trace()
+        # bins = pd.IntervalIndex.from_tuples([(i, i + 20) for i in range(-10, 330, 20)])
+        bins = [-1, 10, 30, 50, 70, 90, 110, 130, 150, 170, 190, 210, 230, 250, 270, 290, 310, 330]
+        df_resampled['WorkLoad'] = pd.cut(df_resampled['WorkLoad'], bins=bins, labels=np.arange(0,340,20))
 
 
         df_resampled.index = (df_resampled.index - df_resampled.index.min()).total_seconds()
@@ -78,15 +81,24 @@ def data_preprocess(folder_path, data_save_path):
 
 def main():
 
-    # Set the folder path
-    folder_path = "./CPET-2-proc"
-    data_save_path = "./data"
+    # Set the folder path 24 files
+    # folder_path = "./CPET-2-proc"
+    # data_save_path = "./data_2"
+
+    folder_path = "./CPET-1-proc/Health"
+    data_save_path = "./data_2"
 
     # 2s抽取一定的数据
     # data_preprocess(folder_path, data_save_path)
 
-    CPET_files = pd.read_csv(os.path.join(data_save_path,"CPET_files.csv"))
-    CPET_files = CPET_files.drop(columns=['VO2'])
+    # pdb.set_trace()
+    CPET_files_2 = pd.read_csv(os.path.join("./data_2","CPET_files.csv"))
+    CPET_files_2 = CPET_files_2.drop(columns=['VO2/kg','BSA','Temperature','Humidity'])
+    CPET_files_3 = pd.read_csv(os.path.join("./data_3","CPET_files.csv"))
+    CPET_files = pd.concat([CPET_files_2, CPET_files_3], ignore_index=True)
+
+    # 去除掉BSA, Temperature, humidity, VO2/kg 这几个参数
+    # CPET_files = CPET_files.drop(columns=['VO2/kg','BSA','Temperature','Humidity'])
 
     # train_ids, test_ids = train_test_split(CPET_files['ID'].unique(), test_size=0.2, random_state=42)
 
@@ -94,8 +106,9 @@ def main():
     # train_df = CPET_files[CPET_files['ID'].isin(train_ids)]
     # test_df = CPET_files[CPET_files['ID'].isin(test_ids)]
 
-    real_columns = ['HR','HRR','RER','VE','VT','BF','VO2/kg']
-    categorical_columns = ['ID','WorkLoad','Age','Height','Weight','BMI','BSA','Temperature','Humidity']
+    real_columns = ['HR','HRR','RER','VE','VT','BF','VO2']
+    # categorical_columns = ['ID','WorkLoad','Age','Height','Weight','BMI','BSA','Temperature','Humidity']
+    categorical_columns = ['ID','WorkLoad','Age','Height','Weight','BMI']
 
     # train_df.to_csv("./train_o.csv",index=None)
     # test_df.to_csv("./test_0.csv",index=None)
@@ -111,8 +124,8 @@ def main():
     train_df = all_df[all_df['ID'].isin(train_ids)]
     test_df = all_df[all_df['ID'].isin(test_ids)]
 
-    train_df.to_csv("./train.csv",index=None)
-    test_df.to_csv("./test.csv",index=None)
+    train_df.to_csv("./train1.csv",index=None)
+    test_df.to_csv("./test1.csv",index=None)
 
 
 if __name__=="__main__":

@@ -4,6 +4,7 @@ import torch
 
 import pdb
 
+
 class GLU(nn.Module):
     """
       The Gated Linear Unit GLU(a,b) = mult(a,sigmoid(b)) is common in NLP 
@@ -53,10 +54,15 @@ class TemporalLayer(nn.Module):
         Args:
             x (torch.tensor): tensor with time steps to pass through the same layer.
         """
+        if x.size(0)==0:
+            pdb.set_trace()
+        # pdb.set_trace()
         t, n = x.size(0), x.size(1)
         x = x.reshape(t * n, -1)
 
         # pdb.set_trace()
+        # print(x.shape)
+        # print(self.module)
         x = self.module(x)
         x = x.reshape(t, n, x.size(-1))
 
@@ -138,8 +144,10 @@ class GatedResidualNetwork(nn.Module):
             x (torch.tensor): tensor thas passes through the GRN
             c (torch.tensor): Optional static context vector
         """
-        # pdb.set_trace()
-        # x.shape=[64,64]
+        # x.shape=[32,175,64]
+        # input_size: 72
+        # output_size: 9
+        # print(x.shape)
         if self.input_size!=self.output_size:
             a = self.skip_layer(x)
         else:
@@ -225,19 +233,29 @@ class VariableSelectionNetwork(nn.Module):
         """
 
         # Generation of variable selection weights
+        # pdb.set_trace()
+
+        # embedding.shape: [32,175,64]
+        # context: [32,8]
+        # sparse_weights: [32,8]
         sparse_weights = self.flattened_inputs(embedding, context)
         if self.is_temporal:
+            # sparse_weights: [32,1,8]        
             sparse_weights = self.softmax(sparse_weights).unsqueeze(2)
         else:
             sparse_weights = self.softmax(sparse_weights).unsqueeze(1)
 
         # Additional non-linear processing for each feature vector
+        # [32,80,8]
         transformed_embeddings = torch.stack(
             [self.transformed_inputs[i](embedding[
                 Ellipsis, i*self.input_size:(i+1)*self.input_size]) for i in range(self.output_size)], axis=-1)
 
+        # pdb.set_trace()
         # Processed features are weighted by their corresponding weights and combined
+        # [32,80,8]
         combined = transformed_embeddings*sparse_weights
+        # [32,8]
         combined = combined.sum(axis=-1)
 
         return combined, sparse_weights
@@ -394,6 +412,7 @@ class QuantileLoss(nn.Module):
         assert preds.size(0) == target.size(0)
 
         losses = []
+        # pdb.set_trace()
         for i, q in enumerate(self.quantiles):
             errors = target - preds[:, i]
             losses.append(torch.max((q-1) * errors, q * errors).unsqueeze(1))
@@ -444,7 +463,7 @@ class TemporalFusionTransformer(nn.Module):
         self.category_counts = parameters["category_counts"]
         self.known_time_dependent = parameters["known_time_dependent"]
         self.observed_time_dependent = parameters["observed_time_dependent"]
-        self.time_dependent = self.known_time_dependent+self.observed_time_dependent
+        self.time_dependent = self.observed_time_dependent ##TODO
 
         # Architecture
         self.batch_size = parameters['batch_size']
@@ -519,9 +538,12 @@ class TemporalFusionTransformer(nn.Module):
         embedding_vectors = [self.static_embeddings[col](x[:, 0, self.col_to_idx[col]].long().to(self.device)) for col in self.static_covariates]
         static_embedding = torch.cat(embedding_vectors, dim=1)
         # static_variable_selection网络含有多个GRN拼接 
+        # static_encoder.shape: [32,80]
+        # static_weights.shape: [32,1,8]
         static_encoder, static_weights = self.static_variable_selection(static_embedding)
 
         # Static context vectors
+        # [32,8]
         static_context_s = self.static_context_variable_selection(static_encoder) # Context for temporal variable selection
         static_context_e = self.static_context_enrichment(static_encoder) # Context for static enrichment layer
         static_context_h = self.static_context_state_h(static_encoder) # Context for local processing of temporal features (encoder/decoder)
@@ -534,17 +556,16 @@ class TemporalFusionTransformer(nn.Module):
     def define_past_inputs_encoder(self, x, context):
         # x.shape [32,55,16]
         # embedding_vectors.shape [32,55,8] 因为workload有8个level
-        embedding_vectors = torch.cat([self.temporal_cat_embeddings[col](x[:, :, self.col_to_idx[col]].long()) for col in self.time_dependent_categorical], dim=2) # 过去 静态时变变量 eg：load
+        # pdb.set_trace()
+        embedding_vectors = torch.cat([self.temporal_cat_embeddings[col](x[:, :, self.col_to_idx[col]].long()) for col in self.time_dependent_categorical], dim=2) # 过去 静态时变变量 eg：WorkLoad
 
-        # TODO 查看为什么这个时候CUDA崩掉了
-        for col in self.time_dependent_continuous:
-            # x[:,:,self.col_to_idx[col]] 就是把训练数据的每一列提取出来
-            self.temporal_real_transformations[col](x[:, :, self.col_to_idx[col]])
-
-        transformation_vectors = torch.cat([self.temporal_real_transformations[col](x[:, :, self.col_to_idx[col]]) for col in self.time_dependent_continuous], dim=2) # 过去 动态时变变量 eg：HR, RER
+        transformation_vectors = torch.cat([self.temporal_real_transformations[col](x[:, :, self.col_to_idx[col]]) for col in self.time_dependent_continuous], dim=2) # 过去 动态时变变量 eg：HR, RER, VE, VT, BF
 
         
         past_inputs = torch.cat([embedding_vectors, transformation_vectors], dim=2)
+        # pdb.set_trace()
+        # past_inputs.shape: ([32, 175, 64])
+        # context.shape [32,80]
         past_encoder, past_weights = self.past_variable_selection(past_inputs, context) #返回的weights是有助于解释feature的重要性
 
         return past_encoder.transpose(0, 1), past_weights
@@ -563,7 +584,7 @@ class TemporalFusionTransformer(nn.Module):
     #这里的repeat就是记录了有几个LSTM串联
     #这里的lstm_encoder就是nn.LSTM， nn.LSTM函数的输入 输出
     def define_lstm_encoder(self, x, static_context_h, static_context_c):
-        pdb.set_trace()
+        # pdb.set_trace()
         output, (state_h, state_c) = self.lstm_encoder(x, (static_context_h.unsqueeze(0).repeat(self.num_lstm_layers,1,1), 
                                                            static_context_c.unsqueeze(0).repeat(self.num_lstm_layers,1,1)))
         
@@ -597,16 +618,18 @@ class TemporalFusionTransformer(nn.Module):
         static_encoder, static_weights, static_context_s, static_context_e, static_context_h, static_context_c = self.define_static_covariate_encoders(x["inputs"])
 
         # Past input variable selection and LSTM encoder
-        pdb.set_trace()
+        # pdb.set_trace()
         # 这个函数实际上就是所有篮筐variable selection的合集
-        past_encoder, past_weights = self.define_past_inputs_encoder(x["inputs"][:, :self.encoder_steps, :].float().to(self.device), static_context_s)
+        # x["inputs"].shape [32,175,16]
+        # static_context_s [32,80]
+        past_encoder, past_weights = self.define_past_inputs_encoder(x["inputs"].float().to(self.device), static_context_s)
 
         # Known future inputs variable selection and LSTM decoder ??? 为什么要加 self.encoder_steps
         # future_decoder, future_weights = self.define_known_future_inputs_decoder(x["inputs"][:, self.encoder_steps:, :].float().to(self.device), static_context_s)
 
         
         # Pass output from variable selection through LSTM encoder and decoder
-        pdb.set_trace()
+        # pdb.set_trace()
         encoder_output, state_h, state_c = self.define_lstm_encoder(past_encoder, static_context_h, static_context_c)
         # decoder_output = self.define_lstm_decoder(future_decoder, static_context_h, static_context_c)
 
@@ -643,7 +666,11 @@ class TemporalFusionTransformer(nn.Module):
         gate_outputs = self.output_gated_skip_connection(temporal_fusion_decoder_outputs)
         norm_outputs = self.output_add_norm(gate_outputs.add(temporal_feature_outputs))
 
-        output = self.output(norm_outputs[:, self.encoder_steps:, :]).view(-1,3)
+        # pdb.set_trace()
+        # output = self.output(norm_outputs[:, self.encoder_steps:, :]).view(-1,3)
+        # norma_outputs.shape: [32,300, 80] -> [32,300,3]
+        output = self.output(norm_outputs).view(-1,3)
+        # output = self.output(norm_outputs[:, 170:, :]).view(-1,3)
         
         attention_weights = {
             'multihead_attention': multihead_attention,

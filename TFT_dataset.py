@@ -2,6 +2,7 @@ import numpy as np
 from torch.utils.data import Dataset
 #TODO
 import pdb
+import torch
 
 class TFT_Dataset(Dataset):
     def __init__(self, data, id_column, time_column, target_column, 
@@ -26,6 +27,7 @@ class TFT_Dataset(Dataset):
         
         # 对于16个entity，不停的遍历每个entity，每个entity都是一个user id
         # encoder_steps: 175  decoder_step: 180
+        # TODO 整数处理机制是什么样的
         for e in data[id_column].unique():
           
           entity_group = data[data[id_column]==e]
@@ -33,8 +35,12 @@ class TFT_Dataset(Dataset):
             
           # train: 1096
           # test: 365
-          data_time_steps = len(entity_group) # 对于每一个entity，有多少个day，时间细粒度的数量 
+          # pdb.set_trace()
+          data_time_steps = len(entity_group) # 对于每一个id，有多少个时间点，时间细粒度的数量 
+          # if entity_group==7:
+          #    pdb.set_trace()
           
+          # print(data_time_steps)
           # pdb.set_trace()
           if data_time_steps >= decoder_steps:
             x = entity_group[input_columns].values.astype(np.float32)
@@ -43,6 +49,8 @@ class TFT_Dataset(Dataset):
             # print(inputs[0].shape) # (917, 180, 10) (186, 180, 10)
 
             y = entity_group[[target_column]].values.astype(np.float32)
+            # if np.isnan(y).any():
+            #    pdb.set_trace()
             outputs.append(np.stack([y[i:data_time_steps - (decoder_steps - 1) + i, :] for i in range(decoder_steps)], axis=1))
             # print(len(outputs)) # 16
             # print(outputs[0].shape) # (917, 180, 1)
@@ -57,7 +65,8 @@ class TFT_Dataset(Dataset):
 
         # pdb.set_trace()
         self.inputs = np.concatenate(inputs, axis=0)
-        self.outputs = np.concatenate(outputs, axis=0)[:,encoder_steps:,:]
+        # self.outputs = np.concatenate(outputs, axis=0)[:,encoder_steps:,:]
+        self.outputs = np.concatenate(outputs, axis=0)
         self.entity = np.concatenate(entity, axis=0)
         self.time = np.concatenate(time, axis=0)
         self.active_inputs = np.ones_like(outputs)
@@ -68,8 +77,8 @@ class TFT_Dataset(Dataset):
 
         self.sampled_data = {
             'inputs': self.inputs,
-            'outputs': self.outputs[:, self.encoder_steps:, :],
-            'active_entries': np.ones_like(self.outputs[:, self.encoder_steps:, :]),
+            'outputs': self.outputs,
+            'active_entries': np.ones_like(self.outputs),
             'time': self.time,
             'identifier': self.entity
         }
