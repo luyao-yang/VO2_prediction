@@ -1,19 +1,19 @@
 {
-    "epochs": 20,
+    "epochs": 50,
     "quantiles": [0.1, 0.5, 0.9],
-    "encoder_steps": 55,
-    "decoder_steps": 60,
+    "encoder_steps": 400,
+    "decoder_steps": 400,
     "batch_size": 32,
     "dropout": 0.3,
     "hidden_layer_size": 80,
     "num_lstm_layers": 1,
     "embedding_dim": 8,
     "num_attention_heads": 1,
-    "learning_rate": 0.001,
-    "static_covariates": ["ID", "Age","Height","Weight","BMI","BSA","Temperature","Humidity"],
-    "category_counts": {"WorkLoad": 18, "ID": 24, "Age":24, "Height":24, "Weight":24, "BMI":24, "BSA":24, "Temperature":24, "Humidity":24},
+    "learning_rate": 0.01,
+    "static_covariates": ["ID", "Age","Height","Weight","BMI"],
+    "category_counts": {"WorkLoad": 26, "ID": 40, "Age":40, "Height":40, "Weight":40, "BMI":26},
     "time_dependent_categorical": ["WorkLoad"],
-    "time_dependent_continuous": ["HR","HRR","RER","VE","VT","BF","VO2/kg"],
+    "time_dependent_continuous": ["HR","HRR","RER","VE","VT","BF"],
     "known_time_dependent": ["WorkLoad"],
-    "observed_time_dependent": ["WorkLoad","HR","HRR","RER","VE","VT","BF","VO2/kg"]
+    "observed_time_dependent": ["WorkLoad","HR","HRR","RER","VE","VT","BF"]
 }
